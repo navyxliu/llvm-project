@@ -12,6 +12,18 @@
 using namespace llvm;
 
 namespace {
+// only support latin-1? Do we need to support wide char?
+static Constant *reverse_string_literal(LLVMContext &ctx, const StringRef & literal) {
+  size_t len = literal.size();
+  SmallVector<unsigned char, 256> RawBytes(len + 1);
+
+  for (size_t i=0; i < len; ++i) {
+    RawBytes[i] = literal[len - 1  - i];
+  }
+  RawBytes[len] = '\0';
+
+  return ConstantDataArray::get(ctx, RawBytes);
+}
 
 bool reverse_global_str(Module &M) {
   LLVMContext &ctx = M.getContext();
@@ -33,15 +45,7 @@ bool reverse_global_str(Module &M) {
             LLVM_DEBUG(dbgs() << "original c-string literal : " << literal << '\n');
 
             if (!literal.empty()) {
-              size_t len = literal.size();
-              SmallVector<unsigned char, 256> RawBytes(len + 1);
-              for (size_t i=0; i < len; ++i) {
-                RawBytes[i] = literal[len - 1  - i];
-              }
-              RawBytes[len] = '\0';
-
-              auto reversed = ConstantDataArray::get(ctx, RawBytes);
-
+              auto reversed = reverse_string_literal(ctx, literal);
               g.setInitializer(reversed);
               LLVM_DEBUG(dbgs() <<  "after updated GV: " << g << '\n');
             } else {
@@ -59,7 +63,7 @@ bool reverse_global_str(Module &M) {
 struct LegacyReverseStr : public ModulePass {
   static char ID;
   LegacyReverseStr() : ModulePass(ID) {}
-  bool runOnFunction(Module &M) override { return reverse_global_str(M); }
+  bool runOnModule(Module &M) override { return reverse_global_str(M); }
 };
 
 struct ReverseGlobalStrPass: PassInfoMixin<ReverseGlobalStrPass> {
@@ -75,7 +79,7 @@ struct ReverseGlobalStrPass: PassInfoMixin<ReverseGlobalStrPass> {
 
 char LegacyReverseStr::ID = 0;
 
-static RegisterPass<LegacyReverseStr> X("ReverseStr", "Reverse global variables of c-str"
+static RegisterPass<LegacyReverseStr> X("ReverseStr", "Reverse global variables of c-str",
                                  false /* Only looks at CFG */,
                                  false /* Analysis Pass */);
 

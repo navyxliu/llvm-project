@@ -393,6 +393,14 @@ else:
             ),
         )
     )
+    config.substitutions.append(
+        (
+            "%loadnewpmreversestr",
+            "-load-pass-plugin={}/ReverseStr{}".format(
+                config.llvm_shlib_dir, config.llvm_shlib_ext
+            ),
+        )
+    )
 
 if config.linked_exampleirtransforms_extension:
     config.substitutions.append(("%loadexampleirtransforms", ""))
