@@ -287,7 +287,7 @@ static void processSimpleOp(Operation *op, RunLivenessAnalysis &la,
 static void processFuncOp(FunctionOpInterface funcOp, Operation *module,
                           RunLivenessAnalysis &la, DenseSet<Value> &nonLiveSet,
                           RDVFinalCleanupList &cl) {
-  LDBG() << "Processing function op: " << funcOp.getOperation()->getName();
+  LDBG() << "Processing function op: " << funcOp.getName();
   if (funcOp.isPublic() || funcOp.isExternal()) {
     LDBG() << "Function is public or external, skipping: "
            << funcOp.getOperation()->getName();
@@ -373,6 +373,47 @@ static void processFuncOp(FunctionOpInterface funcOp, Operation *module,
     assert(isa<CallOpInterface>(callOp) && "expected a call-like user");
     cl.results.push_back({callOp, nonLiveRets});
     collectNonLiveValues(nonLiveSet, callOp->getResults(), nonLiveRets);
+  }
+}
+
+static void processCallOp(CallOpInterface callOp, Operation *module,
+                          RunLivenessAnalysis &la, DenseSet<Value> &nonLiveSet, RDVFinalCleanupList &cl) {
+  if (!la.getSolverConfig().isInterprocedural())
+    return;
+
+  Operation *callableOp = callOp.resolveCallable();
+  auto funcOp = dyn_cast<FunctionOpInterface>(callableOp);
+  if (!funcOp || !funcOp.isPublic()) {
+    return;
+  }
+
+  LDBG() << "Processing callOp " << callOp
+        << " target is public function: " << funcOp.getOperation()->getName();
+
+  // Get the list of unnecessary (non-live) arguments in `nonLiveArgs`.
+  SmallVector<Value> arguments(callOp.getArgOperands());
+  BitVector nonLiveArgs = markLives(arguments, nonLiveSet, la);
+  nonLiveArgs = nonLiveArgs.flip();
+  LDBG() << "nonLiveArgs.count " << nonLiveArgs.count();
+  if (nonLiveArgs.count() > 0) {
+    auto moduleOp = cast<ModuleOp>(module);
+    Operation *clonedOp = funcOp->clone();
+    FunctionOpInterface clonedFunc = cast<FunctionOpInterface>(clonedOp);
+    SymbolTable::setSymbolVisibility(clonedFunc,
+                                  SymbolTable::Visibility::Private);
+    clonedFunc.setName("__" + funcOp.getName().str() + "_clone");
+    moduleOp.getBody()->push_back(clonedOp);
+
+    // Replace all uses - using string names
+    LogicalResult result = SymbolTable::replaceAllSymbolUses(
+        funcOp,
+        clonedFunc.getNameAttr(),
+        moduleOp
+    );
+
+    assert(result.succeeded() && "replacement failed");
+    module->dump();
+    processFuncOp(clonedFunc, module, la, nonLiveSet, cl);
   }
 }
 
@@ -852,6 +893,7 @@ void RemoveDeadValues::runOnOperation() {
     } else if (isa<CallOpInterface>(op)) {
       // Nothing to do because this op is associated with a function op and gets
       // cleaned when the latter is cleaned.
+      processCallOp(cast<CallOpInterface>(op), module, la, deadVals, finalCleanupList);
     } else {
       processSimpleOp(op, la, deadVals, finalCleanupList);
     }
