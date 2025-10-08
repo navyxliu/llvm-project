@@ -114,6 +114,9 @@ std::unique_ptr<Pass>
 createInlinerPass(llvm::StringMap<OpPassManager> opPipelines,
                   std::function<void(OpPassManager &)> defaultPipelineBuilder);
 
+/// Create an optimization pass that privatize public function.
+std::unique_ptr<Pass> createPrivatizePublicFunctionPass();
+
 /// Creates an optimization pass to remove dead values.
 std::unique_ptr<Pass> createRemoveDeadValuesPass();
 

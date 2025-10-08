@@ -93,6 +93,14 @@ def CSE : Pass<"cse"> {
   ];
 }
 
+def PrivatizePublicFunction : Pass<"privatize-public-function"> {
+  let summary = "privatize public function";
+  let description = [{
+    hello.
+  }];
+  let constructor = "mlir::createPrivatizePublicFunctionPass()";
+}
+
 def RemoveDeadValues : Pass<"remove-dead-values"> {
   let summary = "Remove dead values";
   let description = [{

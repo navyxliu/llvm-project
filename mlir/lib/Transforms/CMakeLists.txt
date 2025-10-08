@@ -13,6 +13,7 @@ add_mlir_library(MLIRTransforms
   Mem2Reg.cpp
   OpStats.cpp
   PrintIR.cpp
+  PrivatizePublicFunction.cpp
   RemoveDeadValues.cpp
   SCCP.cpp
   SROA.cpp
